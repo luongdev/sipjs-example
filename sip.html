@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <video id="mediaElement" muted="muted"></video>
+  <video id="localMedia" muted="muted" width="640" height="360"></video>
+
+  <button onclick="share()">Share screen ....</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.20.0/sip.min.js"
+    integrity="sha512-fOcUfAmyIFyCji6t9pSb1XZn7I5Bgb2tLBP9mi101vD6l9gajuRvHg6g/l64I7k8bolWgH7Avt3n7+l9JRuMhg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const { UserAgent, URI, Registerer, SessionState, Web } = SIP;
+
+
+    const mediaElement = document.getElementById('mediaElement');
+    const localMedia = document.getElementById('localMedia');
+
+    const remoteStream = new MediaStream();
+
+    const userAgentOptions = {
+      authorizationPassword: 'MDc4NWM3MTAzMDc0MGVmMTA=',
+      authorizationUsername: '19702',
+      transportOptions: {
+        server: "wss://call.metechvn.com:7443"
+      },
+      uri: new URI('sip', '19702', 'call.metechvn.com', 5090),
+      media: {
+        constraints: { audio: true, video: true }
+      }
+    };
+
+    let session = undefined;
+
+    const simpleUser = new Web.SimpleUser('wss://call.metechvn.com:7443', {
+      aor: 'sip:19702@call.metechvn.com:5090',
+      media: {
+        constraints: { audio: false, video: true },
+        local: { video: localMedia }, remote: { video: mediaElement }
+      },
+      userAgentOptions: {
+        authorizationPassword: 'MDc4NWM3MTAzMDc0MGVmMTA=',
+        authorizationUsername: '19702'
+      },
+      delegate: {
+        onCallReceived: e => {
+          simpleUser.answer().catch(err => alert(err))
+        },
+        onCallAnswered: e => {
+          session = simpleUser.session
+        }
+      }
+    });
+
+    simpleUser.connect().then(() => {
+      console.log('connected')
+
+      simpleUser.register(undefined, {
+        requestDelegate: {
+          onReject: (response) => {
+            console.warn(`[${response}] REGISTER rejected`);
+            let message = `Registration of "${response}" rejected.\n`;
+            message += `Reason: ${response.message.reasonPhrase}\n`;
+            alert(message);
+          }
+        }
+      })
+        .then(() => { })
+        .catch(error => { });
+    }).catch(err => console.log(err))
+
+    function share() {
+      var option = { video: { mediaSource: 'screen' }, audio: true };
+      navigator.mediaDevices.getDisplayMedia(option)
+        .then(function (streams) {
+          const videoTrack = streams.getVideoTracks()[0];
+
+          videoTrack.onended = () => {
+            localMedia.pause();
+          }
+
+          if (session) {
+            const pc = session.sessionDescriptionHandler.peerConnection;
+            for (let i = 0; i < pc.getSenders().length; i++) {
+              const sender = pc.getSenders()[i];
+              if (sender.track && sender.track.kind === videoTrack.kind) {
+                sender.replaceTrack(videoTrack);
+              }
+            }
+          }
+
+          // const sender = pc.getSenders().find(function (s) {
+          //   return s.track.kind == videoTrack.kind;
+          // });
+          // console.log('found sender:', sender);
+          // sender.replaceTrack(videoTrack);
+
+          remoteStream.addTrack(videoTrack)
+          localMedia.srcObject = remoteStream;
+          localMedia.play();
+
+        }, function (error) {
+          console.log(error)
+        });
+    }
+  </script>
+</body>
+
+</html>

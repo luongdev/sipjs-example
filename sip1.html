@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice 1</title>
+</head>
+
+<body>
+  <video id="mediaElement" muted="muted"></video>
+  <video id="localMedia" muted="muted" width="640" height="360"></video>
+
+  <audio id="voice"></audio>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.20.0/sip.min.js"
+    integrity="sha512-fOcUfAmyIFyCji6t9pSb1XZn7I5Bgb2tLBP9mi101vD6l9gajuRvHg6g/l64I7k8bolWgH7Avt3n7+l9JRuMhg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const { UserAgent, URI, Registerer, SessionState, Web } = SIP;
+
+    function setupRemoteMedia(invitation) {
+      const mediaElement = document.getElementById('voice');
+      const remoteStream = new MediaStream();
+      session.sessionDescriptionHandler.peerConnection.getReceivers().forEach((receiver) => {
+        if (receiver.track) {
+          remoteStream.addTrack(receiver.track);
+        }
+      });
+      mediaElement.srcObject = remoteStream
+      mediaElement.play()
+    }
+
+    const userAgentOptions = {
+      authorizationPassword: 'MDc4NWM3MTAzMDc0MGVmMTA=',
+      authorizationUsername: '19702',
+      transportOptions: {
+        server: "wss://call.metechvn.com:7443"
+      },
+      uri: new URI('sip', '19702', 'call.metechvn.com', 5090),
+      media: {
+        constraints: { audio: true, video: true }
+      },
+      delegate: {
+        onInvite: (invitation) => {
+          invitation.stateChange.addListener(state => {
+            if (state === SessionState.Established) setupRemoteMedia(invitation)
+          })
+          invitation.accept()
+        }
+      }
+    };
+
+    const userAgent = new UserAgent(userAgentOptions)
+    const registerer = new Registerer(userAgent)
+
+    userAgent.start().then(() => {
+      registerer.register()
+    })
+
+  </script>
+</body>
+
+</html>

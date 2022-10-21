@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice 1</title>
+</head>
+
+<body>
+  <audio id="voice"></audio>
+  <button onclick="press(0);">Press 0</button>
+  <button onclick="press(1);">Press 1</button>
+  <button onclick="press(2);">Press 2</button>
+  <button onclick="press(3);">Press 3</button>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.20.0/sip.min.js"
+    integrity="sha512-fOcUfAmyIFyCji6t9pSb1XZn7I5Bgb2tLBP9mi101vD6l9gajuRvHg6g/l64I7k8bolWgH7Avt3n7+l9JRuMhg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const { UserAgent, URI, Registerer, SessionState, Web, Inviter, Invitation, Messager } = SIP;
+
+    function setupRemoteMedia(invitation) {
+      const mediaElement = document.getElementById('voice');
+      const remoteStream = new MediaStream();
+      invitation.sessionDescriptionHandler.peerConnection.getReceivers().forEach((receiver) => {
+        if (receiver.track) {
+          remoteStream.addTrack(receiver.track);
+        }
+      });
+      mediaElement.srcObject = remoteStream
+      mediaElement.play()
+    }
+
+    const userAgentOptions = {
+      authorizationPassword: 'Abc@4321',
+      authorizationUsername: '1001',
+      transportOptions: {
+        server: "wss://fs.sapohub.net:7443"
+      },
+      uri: new URI('sip', '1001', 'fs.sapohub.net', 5090),
+      media: { constraints: { audio: true, video: true } }
+    };
+
+    const userAgent = new UserAgent(userAgentOptions)
+    let inviter = null;
+
+
+    userAgent.start().then(() => {
+      const target = UserAgent.makeURI("sip:1002@fs.sapohub.net");
+      inviter = new Inviter(userAgent, target)
+
+      inviter.stateChange.addListener(state => {
+        console.log('Inviter state ..... ' + state)
+        if (state === SessionState.Established) setupRemoteMedia(inviter)
+      })
+
+      inviter.invite({
+        requestDelegate: {
+          onReject: (reason) => {
+            console.log('Inviter bi reject roi ban oi oooo oo oo ')
+            console.log(reason)
+          },
+          onAccept: (response) => {
+            console.log('cai cua no gi day')
+            console.log(response.session instanceof Invitation)
+            console.log(response.session instanceof Inviter)
+          }
+        }
+      });
+
+
+    })
+
+    function press(num) {
+      console.log(inviter.info({
+        requestDelegate: {
+
+        },
+        requestOptions: {
+          body: {
+            contentDisposition: 'render',
+            contentType: 'application/dtmf-relay',
+            content: `Signal=${num}\r\nDuration=1000`
+          }
+        }
+      }).then(res=>console.log(res)))
+      console.log()
+      // const target = UserAgent.makeURI("sip:19702@call.metechvn.com");
+      // const messager = new Messager(userAgent, target, `Signal=${num}\nDuration=1000`, 'application/dtmf-relay')
+    //   inviter.message({
+    //     requestDelegate: {
+    //       onReject: (reason) => {
+    //         console.log('Iasdfasdfasd ')
+    //         console.log(reason)
+    //       },
+    //       onAccept: (response) => {
+    //         console.log('abcdef')
+    //         console.log(response)
+    //       }
+    //     }
+    //   }).then(rs => console.log(rs)).catch(err => console.log(err))
+    }
+
+  </script>
+</body>
+
+</html>

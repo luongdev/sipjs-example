@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+
+  <style>
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<html>
+
+<head>
+  <link rel="stylesheet" href="my-styles.css">
+</head>
+
+
+<body>
+
+  <audio id="remoteAudio" controls style="display: none;">
+    <p>Your browser doesn't support HTML5 audio.</p>
+  </audio>
+
+  <div style="float: right; bottom: 0;" class="hidden" id="callNotify">
+    <h1 id="phoneNumber"></h1>
+    <button onclick="invitationAccept();">Accept</button> <button onclick="hangup();">Reject</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.20.0/sip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+  <script>
+    //     console.log(SIP)
+    //     console.log(MediaStream)
+    // debugger
+
+    const {
+      UserAgent,
+      Inviter,
+      URI,
+      Registerer,
+      SessionState
+    } = SIP;
+
+    const mediaElement = document.getElementById('remoteAudio');
+
+    const remoteStream = new MediaStream();
+    function setupRemoteMedia(session) {
+      session.sessionDescriptionHandler.peerConnection.getReceivers().forEach((receiver) => {
+        if (receiver.track) {
+          remoteStream.addTrack(receiver.track);
+        }
+      });
+      mediaElement.srcObject = remoteStream;
+      mediaElement.play();
+    }
+
+    function cleanupMedia() {
+      mediaElement.srcObject = null;
+      mediaElement.pause();
+    }
+
+    let invite, established = false;
+    function onInvite(invitation) {
+      invite = invitation;
+      console.log(invitation.incomingInviteRequest.message.headers)
+      console.log(`Invited ${new Date()}`)
+      invitation.stateChange.addListener((state) => {
+        console.log(`Session state changed to ${state}`);
+        switch (state) {
+          case SessionState.Initial:
+            break;
+          case SessionState.Establishing:
+            break;
+          case SessionState.Established:
+            // console.log(`Start setup media ${new Date()}`)
+            setupRemoteMedia(invitation);
+            established = true;
+            break;
+          case SessionState.Terminating:
+          // fall through
+          case SessionState.Terminated:
+            cleanupMedia();
+            invite = null;
+            document.getElementById("callNotify").setAttribute("class", "hidden")
+            break;
+          default:
+            throw new Error("Unknown session state.");
+        }
+      });
+      document.getElementById("callNotify").removeAttribute("class")
+      const messageHeaders = invitation.incomingInviteRequest.message.headers;
+
+      // console.log(messageHeaders["X-Call-Id"][0].raw)
+      // document.getElementById("phoneNumber").innerText = messageHeaders["X-Phone-Number"][0].raw
+      // console.log(messageHeaders["X-Phonenumber"][0])
+      // console.log(`Invitation accepted ${new Date()}`)
+    }
+
+    const invitationAccept = () => {
+      invite.accept();
+    }
+
+    const hangup = () => {
+      if (established) {
+        invite.bye();
+      } else {
+        invite.reject();
+      }
+    }
+
+    const transportOptions = {
+      server: "wss://cp-voice-uat.retailhub.vn:7443",
+    };
+
+
+    const userAgentOptions = {
+      authorizationPassword: 'Metech#call@123',
+      authorizationUsername: '110002',
+      log: {
+        level: 'debug',
+        builtinEnabled: true
+      },
+      transportOptions,
+      uri: new URI('sip', '110002', 'cp-voice-uat.retailhub.vn'),
+      delegate: {
+        onInvite
+      },
+      iceCheckingTimeout: 1000
+    };
+
+    const userAgent = new UserAgent(userAgentOptions);
+    userAgent.delegate.onMessage = (m) => {
+      console.log(`Message den roi ca nha oiiiiiiii ${m}`)
+    }
+    const registerer = new Registerer(userAgent);
+    userAgent.start().then(() => {
+      registerer.register();
+
+      const target = new URI('sip', '0865954096', 'cp-voice-uat.retailhub.vn');
+
+      const inviter = new Inviter(userAgent, target, {
+        earlyMedia: true,
+        sessionDescriptionHandlerOptions: {
+          constaints: {
+            audio: true,
+            video: false
+          }
+        },
+        extraHeaders: [`X-Call-Id: ${uuid.v4()}`],
+        delegate: {
+          rejected: () => {
+            alert("rejected was triggered");
+          },
+          cancel: () => {
+            alert("cancel was triggered");
+          },
+          failed: () => {
+            alert("failed was triggered");
+          }
+        }
+      });
+
+      inviter.stateChange.addListener((state) => {
+        console.log(`Session state changed to ${state}`);
+
+        if (inviter.sessionDescriptionHandler
+          && inviter.sessionDescriptionHandler.peerConnection
+          && inviter.sessionDescriptionHandler.peerConnection.getReceivers()) {
+          inviter.sessionDescriptionHandler.peerConnection.getReceivers().forEach((receiver) => {
+            if (receiver.track) {
+              remoteStream.addTrack(receiver.track);
+            }
+          });
+          mediaElement.srcObject = remoteStream;
+          mediaElement.play();
+        }
+
+
+        switch (state) {
+          case SessionState.Initial:
+            break;
+          case SessionState.Establishing:
+            break;
+          case SessionState.Established:
+            // console.log(`Start setup media ${new Date()}`)
+            // setupRemoteMedia(inviter);
+            established = true;
+            // console.log(`Complete setup media ${new Date()}`)
+            break;
+          case SessionState.Terminating:
+          // fall through
+          case SessionState.Terminated:
+            cleanupMedia();
+            invite = null;
+            document.getElementById("callNotify").setAttribute("class", "hidden")
+            break;
+          default:
+            throw new Error("Unknown session state.");
+        }
+      });
+      // inviter.invite().then(e => {
+      //   console.log(e);
+
+      //   console.log(inviter)
+
+
+      // }).catch(err => console.log(err))
+
+    });
+
+  </script>
+</body>
+
+</html>
